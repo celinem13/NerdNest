@@ -12,6 +12,6 @@ coverage/
 
 # env & misc
 .env
-.env.*
+*.env
 *.log
 .DS_Store
