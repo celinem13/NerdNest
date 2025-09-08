@@ -1,7 +1,7 @@
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import mongoose from 'mongoose';
+import 'dotenv/config';    // load secrets from .env
+import express from 'express';    // main web server framework
+import cors from 'cors';      // allows frontend to talk to backend
+import mongoose from 'mongoose';    // library for talking to MongoDB
 
 const app = express();
 
@@ -10,9 +10,33 @@ const PORT = Number(process.env.PORT) || 5174;
 const ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 const MONGODB_URI = process.env.MONGODB_URI;
 
+/* 
+dotenv = reads the .env file → turns lines like PORT=5174 into process.env.PORT.
+
+express = the kitchen. It handles HTTP requests (GET, POST).
+
+cors = a doorman. Only lets requests in from approved origins (like your frontend URL).
+
+mongoose = a translator between JavaScript objects and MongoDB documents.
+
+app = your server instance.
+
+PORT = the port where my app is open.
+
+ORIGIN = who’s allowed to send requests (React app on port 5173).
+
+MONGODB_URI = your pantry address (Atlas connection string).
+*/
+
 // middleware
 app.use(cors({ origin: ORIGIN }));
 app.use(express.json());
+
+/* 
+cors(...) = checks if the request is allowed (based on ORIGIN).
+
+express.json() = read req.body when JSON data is sent.
+*/
 
 // simple health check
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
