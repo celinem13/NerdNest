@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+
+# builds
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# env & misc
+.env
+.env.*
+*.log
+.DS_Store
