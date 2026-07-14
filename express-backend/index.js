@@ -1,7 +1,10 @@
-import 'dotenv/config';    // load secrets from .env
-import express from 'express';    // main web server framework
-import cors from 'cors';      // allows frontend to talk to backend
-import mongoose from 'mongoose';    // library for talking to MongoDB
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import mongoose from "mongoose";
+import dns from "node:dns";
+
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const app = express();
 
@@ -129,6 +132,7 @@ app.use((err, _req, res, _next) => {
   try {
     if (!MONGODB_URI) throw new Error('MONGODB_URI is not set in .env');
     await mongoose.connect(MONGODB_URI);
+    console.log("✅ Connected to MongoDB");
     app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
   } catch (e) {
     console.error('Failed to start server:', e.message);
