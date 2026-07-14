@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import dns from "node:dns";
+import bcrypt from "bcryptjs";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
@@ -10,7 +11,7 @@ const app = express();
 
 // env
 const PORT = Number(process.env.PORT) || 5174;
-const ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 const MONGODB_URI = process.env.MONGODB_URI;
 
 /* 
@@ -45,6 +46,98 @@ express.json() = read req.body when JSON data is sent.
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // --- Minimal Mongo models & routes (Profiles / Posts / Events) ---
+
+const UserSchema = new mongoose.Schema(
+  {
+    username: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+      minlength: 3,
+      maxlength: 30
+    },
+    email: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true
+    },
+    passwordHash: {
+      type: String,
+      required: true
+    }
+  },
+  { timestamps: true }
+);
+
+UserSchema.index({ username: 1 }, { unique: true });
+UserSchema.index({ email: 1 }, { unique: true });
+
+const User = mongoose.model("User", UserSchema);
+
+app.post("/api/auth/register", async (req, res, next) => {
+  try {
+    const username = req.body.username?.trim().toLowerCase();
+    const email = req.body.email?.trim().toLowerCase();
+    const password = req.body.password;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        error: "Username, email, and password are required"
+      });
+    }
+
+    if (username.length < 3 || username.length > 30) {
+      return res.status(400).json({
+        error: "Username must be between 3 and 30 characters"
+      });
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(email)) {
+      return res.status(400).json({
+        error: "Enter a valid email address"
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        error: "Password must be at least 8 characters"
+      });
+    }
+
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }]
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        error: "Username or email is already registered"
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const user = await User.create({
+      username,
+      email,
+      passwordHash
+    });
+
+    return res.status(201).json({
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Profile
 const ProfileSchema = new mongoose.Schema({
@@ -124,46 +217,34 @@ app.post('/api/events/:id/rsvp', async (req, res, next) => {
 // error handler
 app.use((err, _req, res, _next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+
+  if (err?.code === 11000) {
+    return res.status(409).json({
+      error: "Username or email is already registered"
+    });
+  }
+
+  return res.status(err.status || 500).json({
+    error: err.message || "Internal Server Error"
+  });
 });
-
-const UserSchema = new mongoose.Schema(
-  {
-    username: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 3,
-      maxlength: 30
-    },
-    email: {
-      type: String,
-      required: true,
-      trim: true,
-      lowercase: true
-    },
-    passwordHash: {
-      type: String,
-      required: true
-    }
-  },
-  { timestamps: true }
-);
-
-UserSchema.index({ username: 1 }, { unique: true });
-UserSchema.index({ email: 1 }, { unique: true });
-
-const User = mongoose.model("User", UserSchema);
 
 // connect + start
 (async () => {
   try {
-    if (!MONGODB_URI) throw new Error('MONGODB_URI is not set in .env');
+    if (!MONGODB_URI) {
+      throw new Error("MONGODB_URI is not set in .env");
+    }
+
     await mongoose.connect(MONGODB_URI);
     console.log("✅ Connected to MongoDB");
-    app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
+
+    app.listen(PORT, () => {
+      console.log(`🚀 API listening on http://localhost:${PORT}`);
+    });
+
   } catch (e) {
-    console.error('Failed to start server:', e.message);
+    console.error("Failed to start server:", e.message);
     process.exit(1);
   }
 })();
