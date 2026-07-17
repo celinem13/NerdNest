@@ -299,13 +299,39 @@ app.get("/api/auth/me", authenticateToken, async (req, res, next) => {
 });
 
 // Profile
-const ProfileSchema = new mongoose.Schema({
-  displayName: { type: String, required: true },
-  bio: String,
-  interests: { type: [String], default: [] },
-  neighborhood: String,
-  contact: String
-}, { timestamps: true });
+const ProfileSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+    displayName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    bio: String,
+    interests: {
+      type: [String],
+      default: []
+    },
+    neighborhood: String,
+    contact: String
+  },
+  { timestamps: true }
+);
+
+ProfileSchema.index(
+  { userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      userId: { $exists: true }
+    }
+  }
+);
+
 const Profile = mongoose.model('Profile', ProfileSchema);
 
 app.get("/api/profiles", async (_req, res, next) => {
@@ -322,12 +348,66 @@ app.get("/api/profiles", async (_req, res, next) => {
 
 app.post("/api/profiles", authenticateToken, async (req, res, next) => {
   try {
-    const profile = await Profile.create(req.body);
+    const {
+      displayName,
+      bio,
+      interests,
+      neighborhood,
+      contact
+    } = req.body ?? {};
+
+    if (typeof displayName !== "string" || !displayName.trim()) {
+      return res.status(400).json({
+        error: "Display name is required"
+      });
+    }
+
+    const existingProfile = await Profile.findOne({
+      userId: req.auth.sub
+    });
+
+    if (existingProfile) {
+      return res.status(409).json({
+        error: "This account already has a profile"
+      });
+    }
+
+    const profile = await Profile.create({
+      userId: req.auth.sub,
+      displayName: displayName.trim(),
+      bio,
+      interests,
+      neighborhood,
+      contact
+    });
+
     return res.status(201).json(profile);
   } catch (error) {
     next(error);
   }
 });
+
+app.get(
+  "/api/profiles/me",
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const profile = await Profile.findOne({
+        userId: req.auth.sub
+      });
+
+      if (!profile) {
+        return res.status(404).json({
+          error: "Profile not found"
+        });
+      }
+
+      return res.json({ profile });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // Post
 const PostSchema = new mongoose.Schema({
@@ -417,6 +497,12 @@ app.use((err, _req, res, _next) => {
   console.error(err);
 
   if (err?.code === 11000) {
+    if (err.keyPattern?.userId) {
+      return res.status(409).json({
+        error: "This account already has a profile"
+      });
+    }
+
     return res.status(409).json({
       error: "Username or email is already registered"
     });
