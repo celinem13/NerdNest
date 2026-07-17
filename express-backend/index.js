@@ -95,6 +95,29 @@ function createToken(user) {
   );
 }
 
+function authenticateToken(req, res, next) {
+  const authorizationHeader = req.headers.authorization;
+  const [scheme, token] = authorizationHeader?.split(" ") ?? [];
+
+  if (scheme !== "Bearer" || !token) {
+    return res.status(401).json({
+      error: "Authentication token is required"
+    });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+
+    req.auth = payload;
+    return next();
+  } catch {
+    return res.status(401).json({
+      error: "Invalid or expired token"
+    });
+  }
+}
+
+
 app.post("/api/auth/register", async (req, res, next) => {
   try {
     const {
@@ -240,6 +263,29 @@ app.post("/api/auth/login", async (req, res, next) => {
 
     return res.json({
       token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/auth/me", authenticateToken, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.auth.sub);
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found"
+      });
+    }
+
+    return res.json({
       user: {
         id: user._id,
         username: user.username,
