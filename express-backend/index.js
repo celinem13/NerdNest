@@ -320,11 +320,13 @@ app.get("/api/profiles", async (_req, res, next) => {
   }
 });
 
-app.post('/api/profiles', async (req, res, next) => {
+app.post("/api/profiles", authenticateToken, async (req, res, next) => {
   try {
-    const p = await Profile.create(req.body);
-    res.status(201).json(p);
-  } catch (e) { next(e); }
+    const profile = await Profile.create(req.body);
+    return res.status(201).json(profile);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Post
@@ -348,11 +350,13 @@ app.get("/api/posts", async (_req, res, next) => {
   }
 });
 
-app.post('/api/posts', async (req, res, next) => {
+app.post("/api/posts", authenticateToken, async (req, res, next) => {
   try {
-    const p = await Post.create(req.body);
-    res.status(201).json(p);
-  } catch (e) { next(e); }
+    const post = await Post.create(req.body);
+    return res.status(201).json(post);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Event
@@ -378,25 +382,35 @@ app.get("/api/events", async (_req, res, next) => {
   }
 });
 
-app.post('/api/events', async (req, res, next) => {
+app.post("/api/events", authenticateToken, async (req, res, next) => {
   try {
-    const e = await Event.create(req.body);
-    res.status(201).json(e);
-  } catch (err) { next(err); }
+    const event = await Event.create(req.body);
+    return res.status(201).json(event);
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.post('/api/events/:id/rsvp', async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { profileId } = req.body;
-    const updated = await Event.findByIdAndUpdate(
-      id,
-      { $addToSet: { attendees: profileId } },
-      { new: true }
-    );
-    res.json(updated);
-  } catch (err) { next(err); }
-});
+app.post(
+  "/api/events/:id/rsvp",
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { profileId } = req.body;
+
+      const updated = await Event.findByIdAndUpdate(
+        id,
+        { $addToSet: { attendees: profileId } },
+        { new: true }
+      );
+
+      return res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // error handler
 app.use((err, _req, res, _next) => {
