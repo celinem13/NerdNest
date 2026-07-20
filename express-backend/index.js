@@ -299,14 +299,59 @@ app.get("/api/auth/me", authenticateToken, async (req, res, next) => {
 });
 
 // Profile
-const ProfileSchema = new mongoose.Schema({
-  displayName: { type: String, required: true },
-  bio: String,
-  interests: { type: [String], default: [] },
-  neighborhood: String,
-  contact: String
-}, { timestamps: true });
+const ProfileSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+    displayName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    bio: String,
+    interests: {
+      type: [String],
+      default: []
+    },
+    neighborhood: String,
+    contact: String
+  },
+  { timestamps: true }
+);
+
+ProfileSchema.index(
+  { userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      userId: { $exists: true }
+    }
+  }
+);
+
 const Profile = mongoose.model('Profile', ProfileSchema);
+
+async function requireProfile(req, res, next) {
+  try {
+    const profile = await Profile.findOne({
+      userId: req.auth.sub
+    });
+
+    if (!profile) {
+      return res.status(403).json({
+        error: "Create a profile before performing this action"
+      });
+    }
+
+    req.profile = profile;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
 
 app.get("/api/profiles", async (_req, res, next) => {
   try {
@@ -320,12 +365,68 @@ app.get("/api/profiles", async (_req, res, next) => {
   }
 });
 
-app.post('/api/profiles', async (req, res, next) => {
+app.post("/api/profiles", authenticateToken, async (req, res, next) => {
   try {
-    const p = await Profile.create(req.body);
-    res.status(201).json(p);
-  } catch (e) { next(e); }
+    const {
+      displayName,
+      bio,
+      interests,
+      neighborhood,
+      contact
+    } = req.body ?? {};
+
+    if (typeof displayName !== "string" || !displayName.trim()) {
+      return res.status(400).json({
+        error: "Display name is required"
+      });
+    }
+
+    const existingProfile = await Profile.findOne({
+      userId: req.auth.sub
+    });
+
+    if (existingProfile) {
+      return res.status(409).json({
+        error: "This account already has a profile"
+      });
+    }
+
+    const profile = await Profile.create({
+      userId: req.auth.sub,
+      displayName: displayName.trim(),
+      bio,
+      interests,
+      neighborhood,
+      contact
+    });
+
+    return res.status(201).json(profile);
+  } catch (error) {
+    next(error);
+  }
 });
+
+app.get(
+  "/api/profiles/me",
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const profile = await Profile.findOne({
+        userId: req.auth.sub
+      });
+
+      if (!profile) {
+        return res.status(404).json({
+          error: "Profile not found"
+        });
+      }
+
+      return res.json({ profile });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // Post
 const PostSchema = new mongoose.Schema({
@@ -348,12 +449,33 @@ app.get("/api/posts", async (_req, res, next) => {
   }
 });
 
-app.post('/api/posts', async (req, res, next) => {
-  try {
-    const p = await Post.create(req.body);
-    res.status(201).json(p);
-  } catch (e) { next(e); }
-});
+app.post(
+  "/api/posts",
+  authenticateToken,
+  requireProfile,
+  async (req, res, next) => {
+    try {
+      const { title, body, tags } = req.body ?? {};
+
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({
+          error: "Post title is required"
+        });
+      }
+
+      const post = await Post.create({
+        authorId: req.profile._id,
+        title: title.trim(),
+        body,
+        tags
+      });
+
+      return res.status(201).json(post);
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
 
 // Event
 const EventSchema = new mongoose.Schema({
@@ -378,31 +500,97 @@ app.get("/api/events", async (_req, res, next) => {
   }
 });
 
-app.post('/api/events', async (req, res, next) => {
-  try {
-    const e = await Event.create(req.body);
-    res.status(201).json(e);
-  } catch (err) { next(err); }
-});
+app.post(
+  "/api/events",
+  authenticateToken,
+  requireProfile,
+  async (req, res, next) => {
+    try {
+      const { name, when, venue, description } = req.body ?? {};
 
-app.post('/api/events/:id/rsvp', async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { profileId } = req.body;
-    const updated = await Event.findByIdAndUpdate(
-      id,
-      { $addToSet: { attendees: profileId } },
-      { new: true }
-    );
-    res.json(updated);
-  } catch (err) { next(err); }
-});
+      if (
+        typeof name !== "string" ||
+        !name.trim() ||
+        typeof when !== "string" ||
+        typeof venue !== "string" ||
+        !venue.trim()
+      ) {
+        return res.status(400).json({
+          error: "Event name, date, and venue are required"
+        });
+      }
+
+      const eventDate = new Date(when);
+
+      if (Number.isNaN(eventDate.getTime())) {
+        return res.status(400).json({
+          error: "Enter a valid event date"
+        });
+      }
+
+      const event = await Event.create({
+        hostId: req.profile._id,
+        name: name.trim(),
+        when: eventDate,
+        venue: venue.trim(),
+        description
+      });
+
+      return res.status(201).json(event);
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
+
+app.post(
+  "/api/events/:id/rsvp",
+  authenticateToken,
+  requireProfile,
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          error: "Invalid event ID"
+        });
+      }
+
+      const updatedEvent = await Event.findByIdAndUpdate(
+        id,
+        {
+          $addToSet: {
+            attendees: req.profile._id
+          }
+        },
+        { new: true }
+      );
+
+      if (!updatedEvent) {
+        return res.status(404).json({
+          error: "Event not found"
+        });
+      }
+
+      return res.json(updatedEvent);
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
 
 // error handler
 app.use((err, _req, res, _next) => {
   console.error(err);
 
   if (err?.code === 11000) {
+    if (err.keyPattern?.userId) {
+      return res.status(409).json({
+        error: "This account already has a profile"
+      });
+    }
+
     return res.status(409).json({
       error: "Username or email is already registered"
     });
