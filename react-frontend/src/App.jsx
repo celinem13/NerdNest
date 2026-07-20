@@ -2,13 +2,17 @@ import { useEffect, useState } from "react";
 import {
   createProfile,
   getCurrentProfile,
+  getCurrentUser,
   getProfiles
 } from "./api";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
 
+const TOKEN_STORAGE_KEY = "nerdnestToken";
 export default function App() {
   const [auth, setAuth] = useState(null);
+  const [restoringSession, setRestoringSession] =
+    useState(true);
   const [authMode, setAuthMode] = useState("login");
   const [currentProfile, setCurrentProfile] = useState(null);
   const [checkingProfile, setCheckingProfile] = useState(false);
@@ -41,8 +45,85 @@ export default function App() {
     loadProfiles();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      const storedToken =
+        sessionStorage.getItem(TOKEN_STORAGE_KEY);
+
+      if (!storedToken) {
+        setRestoringSession(false);
+        return;
+      }
+
+      try {
+        const userData =
+          await getCurrentUser(storedToken);
+
+        let profile = null;
+
+        try {
+          const profileData =
+            await getCurrentProfile(storedToken);
+
+          profile = profileData.profile;
+        } catch (profileError) {
+          if (profileError.status !== 404) {
+            throw profileError;
+          }
+        }
+
+        if (!cancelled) {
+          setAuth({
+            token: storedToken,
+            user: userData.user
+          });
+
+          setCurrentProfile(profile);
+        }
+      } catch (requestError) {
+        sessionStorage.removeItem(
+          TOKEN_STORAGE_KEY
+        );
+
+        if (!cancelled) {
+          setAuth(null);
+          setCurrentProfile(null);
+
+          if (requestError.status === 401) {
+            setErr(
+              "Your session expired. Please log in again."
+            );
+          } else {
+            setErr(
+              requestError.message ||
+                "Failed to restore your session"
+            );
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setRestoringSession(false);
+        }
+      }
+    }
+
+    restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleAuthenticated(result) {
     setAuth(result);
+
+    sessionStorage.setItem(
+      TOKEN_STORAGE_KEY,
+      result.token
+    );
+
     setErr("");
     setCheckingProfile(true);
 
@@ -64,6 +145,8 @@ export default function App() {
 
   function handleLogout() {
     setAuth(null);
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+
     setAuthMode("login");
     setCurrentProfile(null);
     setCheckingProfile(false);
@@ -123,7 +206,9 @@ export default function App() {
     >
       <h1>NerdNest — Profiles</h1>
 
-      {auth ? (
+      {restoringSession ? (
+        <p>Restoring your session…</p>
+      ) : auth ? (
         <section>
           <p>
             Signed in as{" "}
@@ -241,7 +326,7 @@ export default function App() {
             Create Profile
           </button>
         </form>
-      ) : !auth ? (
+      ) : !restoringSession && !auth ? (
         <p>Log in to create your NerdNest profile.</p>
       ) : null}
 
