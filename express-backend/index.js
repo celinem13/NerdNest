@@ -334,6 +334,25 @@ ProfileSchema.index(
 
 const Profile = mongoose.model('Profile', ProfileSchema);
 
+async function requireProfile(req, res, next) {
+  try {
+    const profile = await Profile.findOne({
+      userId: req.auth.sub
+    });
+
+    if (!profile) {
+      return res.status(403).json({
+        error: "Create a profile before performing this action"
+      });
+    }
+
+    req.profile = profile;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
 app.get("/api/profiles", async (_req, res, next) => {
   try {
     const list = await Profile.find()
@@ -430,14 +449,33 @@ app.get("/api/posts", async (_req, res, next) => {
   }
 });
 
-app.post("/api/posts", authenticateToken, async (req, res, next) => {
-  try {
-    const post = await Post.create(req.body);
-    return res.status(201).json(post);
-  } catch (error) {
-    next(error);
+app.post(
+  "/api/posts",
+  authenticateToken,
+  requireProfile,
+  async (req, res, next) => {
+    try {
+      const { title, body, tags } = req.body ?? {};
+
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({
+          error: "Post title is required"
+        });
+      }
+
+      const post = await Post.create({
+        authorId: req.profile._id,
+        title: title.trim(),
+        body,
+        tags
+      });
+
+      return res.status(201).json(post);
+    } catch (error) {
+      return next(error);
+    }
   }
-});
+);
 
 // Event
 const EventSchema = new mongoose.Schema({
@@ -462,32 +500,82 @@ app.get("/api/events", async (_req, res, next) => {
   }
 });
 
-app.post("/api/events", authenticateToken, async (req, res, next) => {
-  try {
-    const event = await Event.create(req.body);
-    return res.status(201).json(event);
-  } catch (error) {
-    next(error);
+app.post(
+  "/api/events",
+  authenticateToken,
+  requireProfile,
+  async (req, res, next) => {
+    try {
+      const { name, when, venue, description } = req.body ?? {};
+
+      if (
+        typeof name !== "string" ||
+        !name.trim() ||
+        typeof when !== "string" ||
+        typeof venue !== "string" ||
+        !venue.trim()
+      ) {
+        return res.status(400).json({
+          error: "Event name, date, and venue are required"
+        });
+      }
+
+      const eventDate = new Date(when);
+
+      if (Number.isNaN(eventDate.getTime())) {
+        return res.status(400).json({
+          error: "Enter a valid event date"
+        });
+      }
+
+      const event = await Event.create({
+        hostId: req.profile._id,
+        name: name.trim(),
+        when: eventDate,
+        venue: venue.trim(),
+        description
+      });
+
+      return res.status(201).json(event);
+    } catch (error) {
+      return next(error);
+    }
   }
-});
+);
 
 app.post(
   "/api/events/:id/rsvp",
   authenticateToken,
+  requireProfile,
   async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { profileId } = req.body;
 
-      const updated = await Event.findByIdAndUpdate(
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          error: "Invalid event ID"
+        });
+      }
+
+      const updatedEvent = await Event.findByIdAndUpdate(
         id,
-        { $addToSet: { attendees: profileId } },
+        {
+          $addToSet: {
+            attendees: req.profile._id
+          }
+        },
         { new: true }
       );
 
-      return res.json(updated);
+      if (!updatedEvent) {
+        return res.status(404).json({
+          error: "Event not found"
+        });
+      }
+
+      return res.json(updatedEvent);
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 );
