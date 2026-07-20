@@ -1,41 +1,39 @@
 import { useEffect, useState } from "react";
 import {
-  createProfile,
   getCurrentProfile,
   getCurrentUser,
   getProfiles
 } from "./api";
 import LoginForm from "./LoginForm";
+import ProfileForm from "./ProfileForm";
 import RegisterForm from "./RegisterForm";
 
 const TOKEN_STORAGE_KEY = "nerdnestToken";
+
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [restoringSession, setRestoringSession] =
     useState(true);
   const [authMode, setAuthMode] = useState("login");
-  const [currentProfile, setCurrentProfile] = useState(null);
-  const [checkingProfile, setCheckingProfile] = useState(false);
+  const [currentProfile, setCurrentProfile] =
+    useState(null);
+  const [checkingProfile, setCheckingProfile] =
+    useState(false);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-
-  const [form, setForm] = useState({
-    displayName: "",
-    interests: "",
-    neighborhood: "",
-    contact: ""
-  });
 
   useEffect(() => {
     async function loadProfiles() {
       try {
         setLoading(true);
+
         const data = await getProfiles();
         setProfiles(data);
       } catch (requestError) {
         setErr(
-          requestError.message || "Failed to load profiles"
+          requestError.message ||
+            "Failed to load profiles"
         );
       } finally {
         setLoading(false);
@@ -128,14 +126,17 @@ export default function App() {
     setCheckingProfile(true);
 
     try {
-      const data = await getCurrentProfile(result.token);
+      const data =
+        await getCurrentProfile(result.token);
+
       setCurrentProfile(data.profile);
     } catch (requestError) {
       if (requestError.status === 404) {
         setCurrentProfile(null);
       } else {
         setErr(
-          requestError.message || "Failed to check your profile"
+          requestError.message ||
+            "Failed to check your profile"
         );
       }
     } finally {
@@ -145,7 +146,10 @@ export default function App() {
 
   function handleLogout() {
     setAuth(null);
-    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+
+    sessionStorage.removeItem(
+      TOKEN_STORAGE_KEY
+    );
 
     setAuthMode("login");
     setCurrentProfile(null);
@@ -153,47 +157,13 @@ export default function App() {
     setErr("");
   }
 
-  async function handleProfileSubmit(event) {
-    event.preventDefault();
-    setErr("");
+  function handleProfileCreated(profile) {
+    setProfiles((currentProfiles) => [
+      profile,
+      ...currentProfiles
+    ]);
 
-    if (!auth) {
-      setErr("Log in before creating a profile");
-      return;
-    }
-
-    try {
-      const profile = await createProfile(
-        {
-          displayName: form.displayName,
-          interests: form.interests
-            .split(",")
-            .map((interest) => interest.trim())
-            .filter(Boolean),
-          neighborhood: form.neighborhood,
-          contact: form.contact
-        },
-        auth.token
-      );
-
-      setProfiles((currentProfiles) => [
-        profile,
-        ...currentProfiles
-      ]);
-
-      setCurrentProfile(profile);
-
-      setForm({
-        displayName: "",
-        interests: "",
-        neighborhood: "",
-        contact: ""
-      });
-    } catch (requestError) {
-      setErr(
-        requestError.message || "Failed to create profile"
-      );
-    }
+    setCurrentProfile(profile);
   }
 
   return (
@@ -215,14 +185,19 @@ export default function App() {
             <strong>{auth.user.username}</strong>
           </p>
 
-          <button type="button" onClick={handleLogout}>
+          <button
+            type="button"
+            onClick={handleLogout}
+          >
             Log out
           </button>
         </section>
       ) : (
         <section>
           {authMode === "login" ? (
-            <LoginForm onLogin={handleAuthenticated} />
+            <LoginForm
+              onLogin={handleAuthenticated}
+            />
           ) : (
             <RegisterForm
               onRegister={handleAuthenticated}
@@ -250,88 +225,50 @@ export default function App() {
         <p>Checking for your NerdNest profile…</p>
       )}
 
-      {auth && !checkingProfile && currentProfile && (
-        <section>
-          <h2>Your profile</h2>
+      {auth &&
+        !checkingProfile &&
+        currentProfile && (
+          <section>
+            <h2>Your profile</h2>
 
-          <p>
-            <strong>{currentProfile.displayName}</strong>
+            <p>
+              <strong>
+                {currentProfile.displayName}
+              </strong>
 
-            {currentProfile.neighborhood
-              ? ` — ${currentProfile.neighborhood}`
-              : ""}
+              {currentProfile.neighborhood
+                ? ` — ${currentProfile.neighborhood}`
+                : ""}
 
-            {currentProfile.interests?.length
-              ? ` — [${currentProfile.interests.join(", ")}]`
-              : ""}
-          </p>
-        </section>
-      )}
+              {currentProfile.interests?.length
+                ? ` — [${currentProfile.interests.join(
+                    ", "
+                  )}]`
+                : ""}
+            </p>
+          </section>
+        )}
 
-      {auth && !checkingProfile && !currentProfile ? (
-        <form
-          onSubmit={handleProfileSubmit}
-          style={{
-            display: "grid",
-            gap: 8,
-            margin: "16px 0"
-          }}
-        >
-          <input
-            placeholder="Display name"
-            value={form.displayName}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                displayName: event.target.value
-              })
-            }
-            required
-          />
-
-          <input
-            placeholder="Interests (comma-separated)"
-            value={form.interests}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                interests: event.target.value
-              })
-            }
-          />
-
-          <input
-            placeholder="Neighborhood"
-            value={form.neighborhood}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                neighborhood: event.target.value
-              })
-            }
-          />
-
-          <input
-            placeholder="Discord/contact"
-            value={form.contact}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                contact: event.target.value
-              })
-            }
-          />
-
-          <button type="submit">
-            Create Profile
-          </button>
-        </form>
+      {auth &&
+      !checkingProfile &&
+      !currentProfile ? (
+        <ProfileForm
+          token={auth.token}
+          onProfileCreated={
+            handleProfileCreated
+          }
+        />
       ) : !restoringSession && !auth ? (
-        <p>Log in to create your NerdNest profile.</p>
+        <p>
+          Log in to create your NerdNest profile.
+        </p>
       ) : null}
 
       {err && (
-        <p role="alert" style={{ color: "crimson" }}>
+        <p
+          role="alert"
+          style={{ color: "crimson" }}
+        >
           {err}
         </p>
       )}
@@ -345,14 +282,18 @@ export default function App() {
               key={profile._id}
               style={{ marginBottom: 8 }}
             >
-              <strong>{profile.displayName}</strong>
+              <strong>
+                {profile.displayName}
+              </strong>
 
               {profile.neighborhood
                 ? ` — ${profile.neighborhood}`
                 : ""}
 
               {profile.interests?.length
-                ? ` — [${profile.interests.join(", ")}]`
+                ? ` — [${profile.interests.join(
+                    ", "
+                  )}]`
                 : ""}
 
               {profile.contact
@@ -361,7 +302,9 @@ export default function App() {
             </li>
           ))}
 
-          {!profiles.length && <li>No profiles yet.</li>}
+          {!profiles.length && (
+            <li>No profiles yet.</li>
+          )}
         </ul>
       )}
     </div>
