@@ -1,18 +1,78 @@
-// read the backend URL from .env (VITE_API_URL=http://localhost:5174)
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5174';
+export const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5174";
 
-// fetch all profiles (GET /api/profiles)
-export async function getProfiles() {
-  const res = await fetch(`${API_URL}/api/profiles`);
-  if (!res.ok) throw new Error('Failed to load profiles');
-  return res.json();  // turn JSON response into a JS object/array
-}
-export async function createProfile(body) {
-  const res = await fetch(`${API_URL}/api/profiles`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body), // turn JS object into JSON string
+async function request(path, options = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body
+        ? { "Content-Type": "application/json" }
+        : {}),
+      ...options.headers
+    }
   });
-  if (!res.ok) throw new Error('Failed to create profile');
-  return res.json();
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const requestError = new Error(
+      data?.error || `Request failed with status ${response.status}`
+    );
+
+    requestError.status = response.status;
+    throw requestError;
+  }
+
+  return data;
+}
+
+export function registerUser({ username, email, password }) {
+  return request("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      username,
+      email,
+      password
+    })
+  });
+}
+
+export function loginUser({ identifier, password }) {
+  return request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      identifier,
+      password
+    })
+  });
+}
+
+export function getCurrentUser(token) {
+  return request("/api/auth/me", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function getProfiles() {
+  return request("/api/profiles");
+}
+
+export function getCurrentProfile(token) {
+  return request("/api/profiles/me", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export function createProfile(body, token) {
+  return request("/api/profiles", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(body)
+  });
 }
