@@ -6,6 +6,9 @@ import {
 } from "./api";
 import LoginForm from "./LoginForm";
 import ProfileForm from "./ProfileForm";
+import ProfileList, {
+  ProfileSummary
+} from "./ProfileList";
 import RegisterForm from "./RegisterForm";
 
 const TOKEN_STORAGE_KEY = "nerdnestToken";
@@ -230,21 +233,11 @@ export default function App() {
         currentProfile && (
           <section>
             <h2>Your profile</h2>
-
             <p>
-              <strong>
-                {currentProfile.displayName}
-              </strong>
-
-              {currentProfile.neighborhood
-                ? ` — ${currentProfile.neighborhood}`
-                : ""}
-
-              {currentProfile.interests?.length
-                ? ` — [${currentProfile.interests.join(
-                    ", "
-                  )}]`
-                : ""}
+              <ProfileSummary
+                profile={currentProfile}
+                showContact={false}
+              />
             </p>
           </section>
         )}
@@ -273,40 +266,11 @@ export default function App() {
         </p>
       )}
 
-      {loading ? (
-        <p>Loading…</p>
-      ) : (
-        <ul>
-          {profiles.map((profile) => (
-            <li
-              key={profile._id}
-              style={{ marginBottom: 8 }}
-            >
-              <strong>
-                {profile.displayName}
-              </strong>
+      <ProfileList
+        profiles={profiles}
+        loading={loading}
+      />
 
-              {profile.neighborhood
-                ? ` — ${profile.neighborhood}`
-                : ""}
-
-              {profile.interests?.length
-                ? ` — [${profile.interests.join(
-                    ", "
-                  )}]`
-                : ""}
-
-              {profile.contact
-                ? ` — ${profile.contact}`
-                : ""}
-            </li>
-          ))}
-
-          {!profiles.length && (
-            <li>No profiles yet.</li>
-          )}
-        </ul>
-      )}
     </div>
   );
 }
