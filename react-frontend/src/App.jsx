@@ -5,9 +5,11 @@ import {
   getProfiles
 } from "./api";
 import LoginForm from "./LoginForm";
+import RegisterForm from "./RegisterForm";
 
 export default function App() {
   const [auth, setAuth] = useState(null);
+  const [authMode, setAuthMode] = useState("login");
   const [currentProfile, setCurrentProfile] = useState(null);
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [profiles, setProfiles] = useState([]);
@@ -39,7 +41,7 @@ export default function App() {
     loadProfiles();
   }, []);
 
-  async function handleLogin(result) {
+  async function handleAuthenticated(result) {
     setAuth(result);
     setErr("");
     setCheckingProfile(true);
@@ -62,6 +64,7 @@ export default function App() {
 
   function handleLogout() {
     setAuth(null);
+    setAuthMode("login");
     setCurrentProfile(null);
     setCheckingProfile(false);
     setErr("");
@@ -132,7 +135,30 @@ export default function App() {
           </button>
         </section>
       ) : (
-        <LoginForm onLogin={handleLogin} />
+        <section>
+          {authMode === "login" ? (
+            <LoginForm onLogin={handleAuthenticated} />
+          ) : (
+            <RegisterForm
+              onRegister={handleAuthenticated}
+            />
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              setAuthMode((currentMode) =>
+                currentMode === "login"
+                  ? "register"
+                  : "login"
+              )
+            }
+          >
+            {authMode === "login"
+              ? "Need an account? Register"
+              : "Already have an account? Log in"}
+          </button>
+        </section>
       )}
 
       {auth && checkingProfile && (
