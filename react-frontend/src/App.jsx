@@ -4,6 +4,8 @@ import {
   getCurrentUser,
   getProfiles
 } from "./api";
+import PostList from "./features/posts/PostList";
+import usePosts from "./features/posts/usePosts";
 import LoginForm from "./LoginForm";
 import ProfileForm from "./ProfileForm";
 import ProfileList, {
@@ -25,6 +27,12 @@ export default function App() {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  const {
+    posts,
+    loading: postsLoading,
+    error: postsError
+  } = usePosts();
 
   useEffect(() => {
     async function loadProfiles() {
@@ -177,7 +185,7 @@ export default function App() {
         fontFamily: "system-ui, sans-serif"
       }}
     >
-      <h1>NerdNest — Profiles</h1>
+      <h1>NerdNest</h1>
 
       {restoringSession ? (
         <p>Restoring your session…</p>
@@ -233,6 +241,7 @@ export default function App() {
         currentProfile && (
           <section>
             <h2>Your profile</h2>
+
             <p>
               <ProfileSummary
                 profile={currentProfile}
@@ -266,11 +275,16 @@ export default function App() {
         </p>
       )}
 
+      <PostList
+        posts={posts}
+        loading={postsLoading}
+        error={postsError}
+      />
+
       <ProfileList
         profiles={profiles}
         loading={loading}
       />
-
     </div>
   );
 }
