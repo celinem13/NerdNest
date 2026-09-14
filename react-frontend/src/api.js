@@ -76,3 +76,7 @@ export function createProfile(body, token) {
     body: JSON.stringify(body)
   });
 }
+
+export function getPosts() {
+  return request("/api/posts");
+}
