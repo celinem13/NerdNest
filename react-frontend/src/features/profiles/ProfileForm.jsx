@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createProfile } from "./api";
+import { createProfile } from "../../api";
 
 const EMPTY_FORM = {
   displayName: "",

@@ -7,10 +7,9 @@ import {
 import PostList from "./features/posts/PostList";
 import usePosts from "./features/posts/usePosts";
 import LoginForm from "./LoginForm";
-import ProfileForm from "./ProfileForm";
-import ProfileList, {
-  ProfileSummary
-} from "./ProfileList";
+import ProfileForm from "./features/profiles/ProfileForm";
+import ProfileList from "./features/profiles/ProfileList";
+import ProfileSummary from "./features/profiles/ProfileSummary";
 import RegisterForm from "./RegisterForm";
 
 const TOKEN_STORAGE_KEY = "nerdnestToken";
